@@ -48,15 +48,26 @@ int main(void) {
 
   // Initialize your timer library
   virtual_timer_init();
-  nrf_delay_ms(3000);
+//  nrf_delay_ms(3000);
 
   // Set up some timers and see what happens
   //virtual_timer_start_repeated(1000000, led1_toggle);
   //virtual_timer_start_repeated(2000000, led2_toggle);
 
+  // Start a repeated timer that toggles LED1 every 1 second
+  virtual_timer_start_repeated(1000000, led1_toggle);
+
   // loop forever
   while (1) {
     nrf_delay_ms(1000);
+    printf("Timer value: %lu\n", read_timer());
+
+    if (irq_timing_ready) {
+      printf("IRQ start time: %lu\n", irq_start_time);
+      printf("IRQ end time:   %lu\n", irq_end_time);
+      printf("IRQ duration:   %lu us\n", irq_end_time - irq_start_time);
+      irq_timing_ready = false;
+    }
   }
 }
 
