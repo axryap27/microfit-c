@@ -15,6 +15,68 @@ volatile uint32_t irq_start_time = 0;
 volatile uint32_t irq_end_time = 0;
 volatile bool irq_timing_ready = false;
 
+// Helper function: Update CC[0] to the soonest expiring timer
+// Call this after any modification to the linked list
+// Does nothing if the list is empty
+static void update_compare_register(void) {
+  node_t* first = list_get_first();
+  if (first != NULL) {
+    NRF_TIMER4->CC[0] = first->timer_value;
+  }
+}
+
+// Helper function: Handle all expired timers
+// Processes and fires callbacks for any timers that have already expired
+// This handles the edge case where timers fire very close together
+// Note: This function handles its own interrupt disable/enable for safety
+static void handle_expired_timers(void) {
+  while (1) {
+    __disable_irq();
+
+    node_t* first = list_get_first();
+    uint32_t current_time = read_timer();
+
+    // Check if there's an expired timer at the head
+    if (first == NULL || first->timer_value > current_time) {
+      // No expired timers, update CC[0] and exit
+      update_compare_register();
+      __enable_irq();
+      return;
+    }
+
+    // Remove the expired timer from the list
+    node_t* timer_node = list_remove_first();
+
+    // Save timer info before potentially re-inserting
+    bool is_repeated = timer_node->repeated;
+    uint32_t interval = timer_node->microseconds;
+    virtual_timer_callback_t callback = timer_node->callback;
+
+    if (is_repeated) {
+      // Update expiration time and re-insert into the list
+      // Do this BEFORE enabling interrupts to maintain list consistency
+      timer_node->timer_value += interval;
+      list_insert_sorted(timer_node);
+    }
+
+    // Update CC[0] before enabling interrupts
+    update_compare_register();
+
+    __enable_irq();
+
+    // Call the callback with interrupts enabled
+    // (callbacks might take a while and shouldn't block other interrupts)
+    callback();
+
+    // Free the node if it was one-shot (after callback completes)
+    if (!is_repeated) {
+      free(timer_node);
+    }
+
+    // Loop to check for more expired timers
+  }
+}
+
 // This is the interrupt handler that fires on a compare event
 void TIMER4_IRQHandler(void)
 {
@@ -25,23 +87,11 @@ void TIMER4_IRQHandler(void)
   // Capture timer value at start of handler
   irq_start_time = read_timer();
 
-  // Remove the first timer from the list and call its callback
-  node_t* timer_node = list_remove_first();
-  if (timer_node != NULL) {
-    timer_node->callback();
-
-    if (timer_node->repeated) {
-      // Update expiration time and re-insert into the list
-      timer_node->timer_value += timer_node->microseconds;
-      list_insert_sorted(timer_node);
-
-      // Update CC[0] to the next timer's expiration time
-      node_t* first = list_get_first();
-      NRF_TIMER4->CC[0] = first->timer_value;
-    } else {
-      free(timer_node);
-    }
-  }
+  // Handle all expired timers (including ones firing close together)
+  // This function checks for NULL and handles all edge cases
+  // Note: We don't need to disable interrupts here because
+  // interrupts don't preempt themselves (same priority)
+  handle_expired_timers();
 
   // Capture timer value at end of handler
   irq_end_time = read_timer();
@@ -87,7 +137,6 @@ void virtual_timer_init(void)
 // Starts a timer. This function is called for both one-shot and repeated timers
 static uint32_t timer_start(uint32_t microseconds, virtual_timer_callback_t cb, bool repeated)
 {
-
   // Allocate a new linked list node for this timer
   node_t* timer_node = (node_t*)malloc(sizeof(node_t));
 
@@ -101,12 +150,21 @@ static uint32_t timer_start(uint32_t microseconds, virtual_timer_callback_t cb, 
   timer_node->repeated = repeated;
   timer_node->microseconds = microseconds;
 
+  // Disable interrupts to prevent concurrency issues with linked list
+  __disable_irq();
+
   // Insert the timer into the sorted linked list
   list_insert_sorted(timer_node);
 
-  // Set CC[0] to the first timer's expiration time
-  node_t* first = list_get_first();
-  NRF_TIMER4->CC[0] = first->timer_value;
+  // Set CC[0] to the soonest expiring timer (head of list)
+  update_compare_register();
+
+  // Re-enable interrupts
+  __enable_irq();
+
+  // Handle any timers that may have already expired
+  // (edge case: timer set for very short duration or CC was already past)
+  handle_expired_timers();
 
   // Return the pointer as a unique timer ID
   return (uint32_t)timer_node;
@@ -131,4 +189,26 @@ uint32_t virtual_timer_start_repeated(uint32_t microseconds, virtual_timer_callb
 // Do not forget to free removed timers.
 void virtual_timer_cancel(uint32_t timer_id)
 {
+  // Cast the timer_id back to a node pointer
+  node_t* timer_node = (node_t*)timer_id;
+
+  // Check for NULL pointer
+  if (timer_node == NULL) {
+    return;
+  }
+
+  // Disable interrupts to prevent concurrency issues with linked list
+  __disable_irq();
+
+  // Remove the timer from the linked list
+  list_remove(timer_node);
+
+  // Update CC[0] to the soonest expiring timer (may now be different)
+  update_compare_register();
+
+  // Re-enable interrupts
+  __enable_irq();
+
+  // Free the memory for the canceled timer
+  free(timer_node);
 }

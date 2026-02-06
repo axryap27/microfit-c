@@ -20,6 +20,7 @@
 
 #include "microbit_v2.h"
 #include "virtual_timer.h"
+#include "clock_time.h"
 
 void led1_toggle() {
     nrf_gpio_pin_toggle(LED_ROW1);
@@ -48,19 +49,45 @@ int main(void) {
 
   // Initialize your timer library
   virtual_timer_init();
-//  nrf_delay_ms(3000);
 
-  // Set up some timers and see what happens
-  //virtual_timer_start_repeated(1000000, led1_toggle);
-  //virtual_timer_start_repeated(2000000, led2_toggle);
+  // Initialize clock time library (must be after virtual_timer_init)
+  clock_time_init();
 
-  // Start a repeated timer that toggles LED1 every 1 second
-  virtual_timer_start_repeated(1000000, led1_toggle);
+  // Start three separate repeating timers for each LED
+  // LED1: 1 second interval
+  // LED2: 2 second interval
+  // LED3: 4 second interval
+  uint32_t timer1_id = virtual_timer_start_repeated(1000000, led1_toggle);   // 1 second
+  uint32_t timer2_id = virtual_timer_start_repeated(2000000, led2_toggle);   // 2 seconds
+  uint32_t timer3_id = virtual_timer_start_repeated(4000000, led3_toggle);   // 4 seconds
+
+  printf("Started 3 timers: 1s, 2s, 4s\n");
 
   // loop forever
   while (1) {
     nrf_delay_ms(1000);
-    printf("Timer value: %lu\n", read_timer());
+    uint32_t timer_value = read_timer();
+
+    // Get and print the current clock time with zero-padded formatting
+    clock_time_t now = clock_time_get();
+    printf("Clock: %02d:%02d:%02d | Timer: %lu\n",
+           now.hours, now.minutes, now.seconds, timer_value);
+
+    // After 16 seconds, cancel the 2-second and 4-second timers
+    if (timer_value >= 16000000 && timer2_id != 0) {
+      printf("Canceling 2-second and 4-second timers\n");
+      virtual_timer_cancel(timer2_id);
+      virtual_timer_cancel(timer3_id);
+      timer2_id = 0;  // Mark as canceled
+      timer3_id = 0;
+    }
+
+    // After 20 seconds (16 + 4), cancel the 1-second timer
+    if (timer_value >= 20000000 && timer1_id != 0) {
+      printf("Canceling 1-second timer\n");
+      virtual_timer_cancel(timer1_id);
+      timer1_id = 0;  // Mark as canceled
+    }
 
     if (irq_timing_ready) {
       printf("IRQ start time: %lu\n", irq_start_time);

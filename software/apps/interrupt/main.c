@@ -25,30 +25,47 @@ void software_interrupt_trigger(void) {
 void SWI1_EGU1_IRQHandler(void) {
   // Clear interrupt event
   NRF_EGU1->EVENTS_TRIGGERED[0] = 0;
-
-  // Implement me
+  printf("SWI Start!\n");
+  for (int i = 0; i < 5; i++){
+    printf("Stepping through\n");
+    nrf_delay_ms(1000);
+  }
+  printf("SWI End!\n");
 }
 
 void GPIOTE_IRQHandler(void) {
   // Clear interrupt event
   NRF_GPIOTE->EVENTS_IN[0] = 0;
 
-  // Implement me
+  printf("Button A pressed! (GPIOTE interrupt)\n");
 }
 
 int main(void) {
   printf("Board started!\n");
 
-  // First, trigger a GPIOTE interrupt
-  // You can access the GPIOTE register map as NRF_GPIOTE->
-  //    where the register name in all caps goes after the arrow.
-  //    For example, NRF_GPIOTE->CONFIG[0]
-  // Add code here
+
+  NRF_GPIOTE->CONFIG[0] = (1 << 0) |      // MODE: Event
+                          (14 << 8) |     // PSEL: Pin 14
+                          (0 << 13) |     // PORT: Port 0
+                          (2 << 16);      // POLARITY: HiToLo
+
+  // Enable interrupt for IN[0] event (channel 0)
+  NRF_GPIOTE->INTENSET = (1 << 0);
+
+  // Enable GPIOTE interrupt in NVIC and set priority
+  NVIC_SetPriority(GPIOTE_IRQn, 1);
+  NVIC_EnableIRQ(GPIOTE_IRQn);
+
+  NVIC_SetPriority(SWI1_EGU1_IRQn, 7);
+
 
 
   // After the GPIOTE is working, next trigger a software interrupt
   // Use the software_interupt_* functions defined above
   // Add code here
+  software_interrupt_init();
+  software_interrupt_trigger();
+
 
 
   // loop forever
