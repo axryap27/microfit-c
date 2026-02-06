@@ -14,7 +14,14 @@ typedef struct node_t {
 
     // *** Additional timer fields ***
 
-    // add your own variables here
+    // callback function to call when this timer expires
+    virtual_timer_callback_t callback;
+
+    // whether this timer should repeat
+    bool repeated;
+
+    // the repeat interval in microseconds
+    uint32_t microseconds;
 
     // *** Do not edit below this line ***
 
@@ -25,6 +32,7 @@ typedef struct node_t {
     // pointer to next node in list. Do not change this field for a node or you
     //  will break the list
     struct node_t* next;
+    
 } node_t;
 
 

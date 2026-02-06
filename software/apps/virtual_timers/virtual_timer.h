@@ -1,6 +1,14 @@
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "nrf.h"
+
+// Interrupt timing data (set by the ISR)
+extern volatile uint32_t irq_start_time;
+extern volatile uint32_t irq_end_time;
+extern volatile bool irq_timing_ready;
 
 // Type for the function pointer to call when the timer expires
 // A virtual_timer_callback_t can be any function that takes no arguments and returns no value

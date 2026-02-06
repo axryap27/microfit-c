@@ -1,12 +1,16 @@
 #pragma once
+#include <stdio.h>
 
 #include "nrf.h"
 #include "stdbool.h"
+#include <stdint.h>
 
 typedef enum {
   GPIO_INPUT = 0,
   GPIO_OUTPUT,
 } gpio_direction_t;
+
+
 
 // Inputs: 
 //  gpio_num - gpio number 0-31 OR (32 + gpio number)
