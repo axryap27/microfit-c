@@ -20,9 +20,14 @@ NRF_TWI_MNGR_DEF(twi_mngr_instance, 1, 0);
 // App timer for periodic temperature reading
 APP_TIMER_DEF(temp_timer);
 
-static void temp_timer_callback(void* _unused) {
+static void sensor_timer_callback(void* _unused) {
   float temp = lsm303agr_read_temperature();
-  printf("Temperature: %f C\n", temp);
+  lsm303agr_measurement_t accel = lsm303agr_read_accelerometer();
+  lsm303agr_measurement_t mag = lsm303agr_read_magnetometer();
+
+  printf("Temp: %f C\n", temp);
+  printf("Accel (g): X: %f  Y: %f  Z: %f\n", accel.x_axis, accel.y_axis, accel.z_axis);
+  printf("Mag (uT):  X: %f  Y: %f  Z: %f\n\n", mag.x_axis, mag.y_axis, mag.z_axis);
 }
 
 int main(void) {
@@ -45,7 +50,7 @@ int main(void) {
 
   // Initialize and start app timer for temperature readings every 1 second
   app_timer_init();
-  app_timer_create(&temp_timer, APP_TIMER_MODE_REPEATED, temp_timer_callback);
+  app_timer_create(&temp_timer, APP_TIMER_MODE_REPEATED, sensor_timer_callback);
   app_timer_start(temp_timer, 32768, NULL); // 32768 ticks = 1 second
 
   // Loop forever

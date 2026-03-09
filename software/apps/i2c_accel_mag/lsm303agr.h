@@ -104,3 +104,9 @@ lsm303agr_measurement_t lsm303agr_read_accelerometer(void);
 // Return measurements as floating point values in uT
 lsm303agr_measurement_t lsm303agr_read_magnetometer(void);
 
+// Compute tilt angle (Phi) from accelerometer data
+//
+// accel - accelerometer measurement in g's
+// Return tilt angle from Z axis in degrees
+float lsm303agr_tilt_angle(lsm303agr_measurement_t accel);
+

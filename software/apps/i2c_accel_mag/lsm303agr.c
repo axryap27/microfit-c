@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <math.h>
 
 #include "lsm303agr.h"
 #include "nrf_delay.h"
@@ -125,17 +126,60 @@ float lsm303agr_read_temperature(void) {
 }
 
 lsm303agr_measurement_t lsm303agr_read_accelerometer(void) {
-  //TODO: implement me
+  // Read all 6 registers (2 per axis)
+  uint8_t x_l = i2c_reg_read(LSM303AGR_ACC_ADDRESS, OUT_X_L_A);
+  uint8_t x_h = i2c_reg_read(LSM303AGR_ACC_ADDRESS, OUT_X_H_A);
+  uint8_t y_l = i2c_reg_read(LSM303AGR_ACC_ADDRESS, OUT_Y_L_A);
+  uint8_t y_h = i2c_reg_read(LSM303AGR_ACC_ADDRESS, OUT_Y_H_A);
+  uint8_t z_l = i2c_reg_read(LSM303AGR_ACC_ADDRESS, OUT_Z_L_A);
+  uint8_t z_h = i2c_reg_read(LSM303AGR_ACC_ADDRESS, OUT_Z_H_A);
 
-  lsm303agr_measurement_t measurement = {0};
+  // Combine into 16-bit signed values, then right-shift 6 (10-bit left-aligned)
+  int16_t x_raw = ((int16_t)((x_h << 8) | x_l)) >> 6;
+  int16_t y_raw = ((int16_t)((y_h << 8) | y_l)) >> 6;
+  int16_t z_raw = ((int16_t)((z_h << 8) | z_l)) >> 6;
+
+  // Sensitivity for +/- 2g normal mode: 3.9 mg/LSB
+  // Convert mg to g by dividing by 1000
+  lsm303agr_measurement_t measurement;
+  measurement.x_axis = (float)x_raw * 3.9 / 1000.0;
+  measurement.y_axis = (float)y_raw * 3.9 / 1000.0;
+  measurement.z_axis = (float)z_raw * 3.9 / 1000.0;
   return measurement;
 }
 
 lsm303agr_measurement_t lsm303agr_read_magnetometer(void) {
-  //TODO: implement me
+  // Read all 6 registers (2 per axis)
+  uint8_t x_l = i2c_reg_read(LSM303AGR_MAG_ADDRESS, OUTX_L_REG_M);
+  uint8_t x_h = i2c_reg_read(LSM303AGR_MAG_ADDRESS, OUTX_H_REG_M);
+  uint8_t y_l = i2c_reg_read(LSM303AGR_MAG_ADDRESS, OUTY_L_REG_M);
+  uint8_t y_h = i2c_reg_read(LSM303AGR_MAG_ADDRESS, OUTY_H_REG_M);
+  uint8_t z_l = i2c_reg_read(LSM303AGR_MAG_ADDRESS, OUTZ_L_REG_M);
+  uint8_t z_h = i2c_reg_read(LSM303AGR_MAG_ADDRESS, OUTZ_H_REG_M);
 
-  lsm303agr_measurement_t measurement = {0};
+  // Combine into 16-bit signed values (right-aligned, no shift needed)
+  int16_t x_raw = (int16_t)((x_h << 8) | x_l);
+  int16_t y_raw = (int16_t)((y_h << 8) | y_l);
+  int16_t z_raw = (int16_t)((z_h << 8) | z_l);
 
+  // Sensitivity: 1.5 mgauss/LSB
+  // Convert mgauss to microtesla by dividing by 10
+  lsm303agr_measurement_t measurement;
+  measurement.x_axis = (float)x_raw * 1.5 / 10.0;
+  measurement.y_axis = (float)y_raw * 1.5 / 10.0;
+  measurement.z_axis = (float)z_raw * 1.5 / 10.0;
   return measurement;
+}
+
+float lsm303agr_tilt_angle(lsm303agr_measurement_t accel) {
+  float x = accel.x_axis;
+  float y = accel.y_axis;
+  float z = accel.z_axis;
+
+  // Equation 13: Phi = atan(Z / sqrt(X^2 + Y^2))
+  float phi_rad = atan(z / sqrt(x * x + y * y));
+
+  // Convert radians to degrees
+  return phi_rad * (180.0 / M_PI);
 }
 
