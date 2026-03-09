@@ -21,7 +21,8 @@ static const nrf_twi_mngr_t* i2c_manager = NULL;
 static uint8_t i2c_reg_read(uint8_t i2c_addr, uint8_t reg_addr) {
   uint8_t rx_buf = 0;
   nrf_twi_mngr_transfer_t const read_transfer[] = {
-    //TODO: implement me
+    NRF_TWI_MNGR_WRITE(i2c_addr, &reg_addr, 1, NRF_TWI_MNGR_NO_STOP),
+    NRF_TWI_MNGR_READ(i2c_addr, &rx_buf, 1, 0),
   };
   ret_code_t result = nrf_twi_mngr_perform(i2c_manager, NULL, read_transfer, 2, NULL);
   if (result != NRF_SUCCESS) {
@@ -43,8 +44,14 @@ static uint8_t i2c_reg_read(uint8_t i2c_addr, uint8_t reg_addr) {
 // i2c_addr - address of the device to write to
 // reg_addr - address of the register within the device to write
 static void i2c_reg_write(uint8_t i2c_addr, uint8_t reg_addr, uint8_t data) {
-  //TODO: implement me
-  //Note: there should only be a single two-byte transfer to be performed
+  uint8_t buf[2] = {reg_addr, data};
+  nrf_twi_mngr_transfer_t const write_transfer[] = {
+    NRF_TWI_MNGR_WRITE(i2c_addr, buf, 2, 0),
+  };
+  ret_code_t result = nrf_twi_mngr_perform(i2c_manager, NULL, write_transfer, 1, NULL);
+  if (result != NRF_SUCCESS) {
+    printf("I2C write failed! Error: %lX\n", result);
+  }
 }
 
 // Initialize and configure the LSM303AGR accelerometer/magnetometer
@@ -69,7 +76,13 @@ void lsm303agr_init(const nrf_twi_mngr_t* i2c) {
 
   // Read WHO AM I register
   // Always returns the same value if working
-  //TODO: read the Accelerometer WHO AM I register and check the result
+  uint8_t acc_who_am_i = i2c_reg_read(LSM303AGR_ACC_ADDRESS, WHO_AM_I_A);
+  printf("Accelerometer WHO_AM_I: 0x%02X\n", acc_who_am_i);
+  if (acc_who_am_i == 0x33) {
+    printf("Accelerometer WHO_AM_I is correct!\n");
+  } else {
+    printf("Accelerometer WHO_AM_I is incorrect! Expected 0x33\n");
+  }
 
   // ---Initialize Magnetometer---
 
@@ -85,7 +98,13 @@ void lsm303agr_init(const nrf_twi_mngr_t* i2c) {
   i2c_reg_write(LSM303AGR_MAG_ADDRESS, CFG_REG_A_M, 0x0C);
 
   // Read WHO AM I register
-  //TODO: read the Magnetometer WHO AM I register and check the result
+  uint8_t mag_who_am_i = i2c_reg_read(LSM303AGR_MAG_ADDRESS, WHO_AM_I_M);
+  printf("Magnetometer WHO_AM_I: 0x%02X\n", mag_who_am_i);
+  if (mag_who_am_i == 0x40) {
+    printf("Magnetometer WHO_AM_I is correct!\n");
+  } else {
+    printf("Magnetometer WHO_AM_I is incorrect! Expected 0x40\n");
+  }
 
   // ---Initialize Temperature---
 
@@ -98,9 +117,11 @@ void lsm303agr_init(const nrf_twi_mngr_t* i2c) {
 //
 // Return measurement as floating point value in degrees C
 float lsm303agr_read_temperature(void) {
-  //TODO: implement me
-
-  return 0.0;
+  uint8_t temp_l = i2c_reg_read(LSM303AGR_ACC_ADDRESS, OUT_TEMP_L_A);
+  uint8_t temp_h = i2c_reg_read(LSM303AGR_ACC_ADDRESS, OUT_TEMP_H_A);
+  int16_t temp_raw = (int16_t)((temp_h << 8) | temp_l);
+  float temperature = ((float)temp_raw * (1.0 / 256.0)) + 25.0;
+  return temperature;
 }
 
 lsm303agr_measurement_t lsm303agr_read_accelerometer(void) {
