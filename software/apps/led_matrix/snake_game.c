@@ -156,36 +156,75 @@ void snake_game_init(void) {
 // each call advances the game state one iteration
 void snake_game_advance_state(void) {
   // if the game is over, no longer advance the state
-  // TODO
+  if (game_state.game_over) {
+    return;
+  }
 
   // handle button presses
-  //  If BTN_A was pressed, rotate left from the current direction
-  //  If BTN_B was pressed, rotate right from the current direction
-  //    e.g., if previously going right, now go down instead
-  // TODO
+  //  If BTN_A was pressed, rotate left (counterclockwise)
+  //  If BTN_B was pressed, rotate right (clockwise)
+  if (game_state.button_pressed == BTN_A) {
+    switch (game_state.dir) {
+      case UP:    game_state.dir = LEFT;  break;
+      case LEFT:  game_state.dir = DOWN;  break;
+      case DOWN:  game_state.dir = RIGHT; break;
+      case RIGHT: game_state.dir = UP;    break;
+    }
+  } else if (game_state.button_pressed == BTN_B) {
+    switch (game_state.dir) {
+      case UP:    game_state.dir = RIGHT; break;
+      case RIGHT: game_state.dir = DOWN;  break;
+      case DOWN:  game_state.dir = LEFT;  break;
+      case LEFT:  game_state.dir = UP;    break;
+    }
+  }
+  game_state.button_pressed = 0;
 
   // remove the snake tail from the queue and the model
-  //  unless the number of iterations is a multiple of ten,
-  //  in which case grow the snake by simply NOT removing the tail
-  // TODO
+  //  unless the number of iterations is a multiple of ten (grow the snake)
+  if (game_state.iterations % 10 != 0) {
+    snakeloc_t tail = queue_pop_tail();
+    if (tail.row >= 0 && tail.col >= 0) {
+      game_state.model[tail.row][tail.col] = false;
+    }
+  }
 
   // advance the snake head location based on the current direction
-  // TODO
+  switch (game_state.dir) {
+    case UP:    game_state.head.row--; break;
+    case DOWN:  game_state.head.row++; break;
+    case LEFT:  game_state.head.col--; break;
+    case RIGHT: game_state.head.col++; break;
+  }
 
-  // check for collision with game boarders (<0 or >4) or with the snake itself
-  //  if the new head position was already true in the model, that's a collision
-  //
-  // In the case of a collision:
-  //  game_over should become true
-  //  print a message with the number of iterations (the current score)
-  //  draw or write something notable on the LED matrix so it's clear the game ended
-  // TODO
+  // check for collision with game borders (<0 or >4) or with the snake itself
+  if (game_state.head.row < 0 || game_state.head.row > 4 ||
+      game_state.head.col < 0 || game_state.head.col > 4 ||
+      game_state.model[game_state.head.row][game_state.head.col]) {
+    game_state.game_over = true;
+    printf("Game Over! Score: %d\n", game_state.iterations);
+    // draw an X on the LED matrix to indicate game over
+    memset(game_state.model, false, 5 * 5 * sizeof(bool));
+    game_state.model[0][0] = true;
+    game_state.model[1][1] = true;
+    game_state.model[2][2] = true;
+    game_state.model[3][3] = true;
+    game_state.model[4][4] = true;
+    game_state.model[0][4] = true;
+    game_state.model[1][3] = true;
+    game_state.model[3][1] = true;
+    game_state.model[4][0] = true;
+    led_matrix_set(game_state.model);
+    return;
+  }
 
   // update game state with new head location in the model and the queue
-  // TODO
+  game_state.model[game_state.head.row][game_state.head.col] = true;
+  queue_push_head(game_state.head);
+  game_state.iterations++;
 
   // display the game model on the LED matrix
-  // TODO
+  led_matrix_set(game_state.model);
 }
 
 

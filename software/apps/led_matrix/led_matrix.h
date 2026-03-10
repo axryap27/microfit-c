@@ -7,5 +7,10 @@
 // Initialize the LED matrix display
 void led_matrix_init(void);
 
-// You may need to add more functions here
+// Set the LED matrix display buffer (5x5 grid of booleans)
+void led_matrix_set(bool grid[5][5]);
+
+// Refresh the LED matrix display (strobe all rows once, ~5ms)
+// Call this rapidly in a loop to maintain a visible display
+void led_matrix_refresh(void);
 

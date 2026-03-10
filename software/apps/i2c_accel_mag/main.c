@@ -27,7 +27,9 @@ static void sensor_timer_callback(void* _unused) {
 
   printf("Temp: %f C\n", temp);
   printf("Accel (g): X: %f  Y: %f  Z: %f\n", accel.x_axis, accel.y_axis, accel.z_axis);
-  printf("Mag (uT):  X: %f  Y: %f  Z: %f\n\n", mag.x_axis, mag.y_axis, mag.z_axis);
+  printf("Mag (uT):  X: %f  Y: %f  Z: %f\n", mag.x_axis, mag.y_axis, mag.z_axis);
+  float tilt = lsm303agr_tilt_angle(accel);
+  printf("Tilt (deg): %f\n\n", tilt);
 }
 
 int main(void) {

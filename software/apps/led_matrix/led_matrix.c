@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "nrf_gpio.h"
+#include "nrf_delay.h"
 #include "app_timer.h"
 
 #include "led_matrix.h"
@@ -42,4 +43,38 @@ void led_matrix_init(void) {
   nrf_gpio_pin_set(LED_COL5);     // Column 5 HIGH = LED OFF
 }
 
+static bool display_buffer[5][5] = {{false}};
 
+void led_matrix_set(bool grid[5][5]) {
+  memcpy(display_buffer, grid, sizeof(display_buffer));
+}
+
+void led_matrix_refresh(void) {
+  uint32_t row_pins[] = {LED_ROW1, LED_ROW2, LED_ROW3, LED_ROW4, LED_ROW5};
+  uint32_t col_pins[] = {LED_COL1, LED_COL2, LED_COL3, LED_COL4, LED_COL5};
+
+  for (int row = 0; row < 5; row++) {
+    // disable all rows
+    for (int r = 0; r < 5; r++) {
+      nrf_gpio_pin_clear(row_pins[r]);
+    }
+
+    // set columns for this row (LOW = LED on, HIGH = LED off)
+    for (int col = 0; col < 5; col++) {
+      if (display_buffer[row][col]) {
+        nrf_gpio_pin_clear(col_pins[col]);
+      } else {
+        nrf_gpio_pin_set(col_pins[col]);
+      }
+    }
+
+    // enable this row
+    nrf_gpio_pin_set(row_pins[row]);
+    nrf_delay_us(1000);
+  }
+
+  // disable all rows after strobing
+  for (int r = 0; r < 5; r++) {
+    nrf_gpio_pin_clear(row_pins[r]);
+  }
+}

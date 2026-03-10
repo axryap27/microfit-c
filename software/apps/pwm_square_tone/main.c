@@ -27,12 +27,15 @@ nrf_pwm_sequence_t pwm_sequence = {
 };
 
 
+
 static void pwm_init(void) {
   // Initialize the PWM
   // SPEAKER_OUT is the output pin, mark the others as NRFX_PWM_PIN_NOT_USED
   // Set the clock to 500 kHz, count mode to Up, and load mode to Common
   // The Countertop value doesn't matter for now. We'll set it in play_tone()
   // TODO
+
+
 }
 
 static void play_tone(uint16_t frequency) {
@@ -58,7 +61,6 @@ int main(void) {
   pwm_init();
 
   // Play the A4 tone for one second
-  // TODO
 
   // Play the C#5 tone for one second
   // TODO
