@@ -1,6 +1,7 @@
-// SSD1306 OLED display driver (128x32, I2C)
+// SH1107 OLED display driver (128x64, I2C)
+// SparkFun Qwiic OLED 1.3"
 //
-// Simple text display using a built-in 5x7 font
+// The SH1107 uses page addressing with 128 columns and 8 pages (64 rows).
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -12,15 +13,14 @@
 
 static const nrf_twi_mngr_t* i2c_manager = NULL;
 
-// Display buffer: 4 pages x 128 columns
-static uint8_t display_buf[SSD1306_PAGES * SSD1306_WIDTH];
+// Display buffer: 8 pages x 128 columns
+static uint8_t display_buf[OLED_PAGES * OLED_WIDTH];
 
 // Current cursor position
 static uint8_t cursor_col;
 static uint8_t cursor_page;
 
 // Minimal 5x7 ASCII font (characters 32-126)
-// Each character is 5 bytes wide, each byte is a column (LSB = top)
 static const uint8_t font_5x7[][5] = {
   {0x00,0x00,0x00,0x00,0x00}, // space
   {0x00,0x00,0x5F,0x00,0x00}, // !
@@ -119,49 +119,58 @@ static const uint8_t font_5x7[][5] = {
   {0x10,0x08,0x08,0x10,0x08}, // ~
 };
 
-// Send a command byte to the display
-static void ssd1306_cmd(uint8_t cmd) {
-  uint8_t buf[2] = {0x00, cmd}; // 0x00 = command mode
+// Send a command byte
+static void sh1107_cmd(uint8_t cmd) {
+  uint8_t buf[2] = {0x00, cmd};
   nrf_twi_mngr_transfer_t const transfer[] = {
-    NRF_TWI_MNGR_WRITE(SSD1306_ADDRESS, buf, 2, 0),
+    NRF_TWI_MNGR_WRITE(SH1107_ADDRESS, buf, 2, 0),
   };
   nrf_twi_mngr_perform(i2c_manager, NULL, transfer, 1, NULL);
 }
 
 void ssd1306_init(const nrf_twi_mngr_t* i2c) {
   i2c_manager = i2c;
-  nrf_delay_ms(100); // Wait for display power-up
+  nrf_delay_ms(100);
 
-  ssd1306_cmd(0xAE); // Display OFF
-  ssd1306_cmd(0xD5); // Set clock divide
-  ssd1306_cmd(0x80);
-  ssd1306_cmd(0xA8); // Set multiplex ratio
-  ssd1306_cmd(0x1F); // 32 lines
-  ssd1306_cmd(0xD3); // Set display offset
-  ssd1306_cmd(0x00);
-  ssd1306_cmd(0x40); // Set start line 0
-  ssd1306_cmd(0x8D); // Charge pump
-  ssd1306_cmd(0x14); // Enable charge pump
-  ssd1306_cmd(0x20); // Memory addressing mode
-  ssd1306_cmd(0x00); // Horizontal addressing
-  ssd1306_cmd(0xA1); // Segment remap
-  ssd1306_cmd(0xC8); // COM output scan direction
-  ssd1306_cmd(0xDA); // COM pins config
-  ssd1306_cmd(0x02); // For 128x32
-  ssd1306_cmd(0x81); // Set contrast
-  ssd1306_cmd(0x8F);
-  ssd1306_cmd(0xD9); // Set pre-charge period
-  ssd1306_cmd(0xF1);
-  ssd1306_cmd(0xDB); // Set VCOMH deselect
-  ssd1306_cmd(0x40);
-  ssd1306_cmd(0x2E); // Deactivate scroll
-  ssd1306_cmd(0xA4); // Display from RAM
-  ssd1306_cmd(0xA6); // Normal display (not inverted)
-  ssd1306_cmd(0xAF); // Display ON
+  sh1107_cmd(0xAE); // Display OFF
+
+  sh1107_cmd(0xDC); // Set display start line
+  sh1107_cmd(0x00);
+
+  sh1107_cmd(0x81); // Set contrast
+  sh1107_cmd(0x2F);
+
+  sh1107_cmd(0x20); // Set memory addressing mode (page)
+
+  sh1107_cmd(0xA0); // Segment re-map (normal)
+  sh1107_cmd(0xC0); // COM output scan direction (normal)
+
+  sh1107_cmd(0xA8); // Set multiplex ratio
+  sh1107_cmd(0x3F); // 64 lines
+
+  sh1107_cmd(0xD3); // Set display offset
+  sh1107_cmd(0x60); // Offset for SparkFun 1.3" module
+
+  sh1107_cmd(0xD5); // Set clock divide ratio
+  sh1107_cmd(0x51);
+
+  sh1107_cmd(0xD9); // Set pre-charge period
+  sh1107_cmd(0x22);
+
+  sh1107_cmd(0xDB); // Set VCOMH deselect level
+  sh1107_cmd(0x35);
+
+  sh1107_cmd(0xB0); // Set page address to 0
+  sh1107_cmd(0xA4); // Display from RAM
+  sh1107_cmd(0xA6); // Normal display (not inverted)
+
+  sh1107_cmd(0xAF); // Display ON
+
+  nrf_delay_ms(100);
 
   ssd1306_clear();
   ssd1306_display();
-  printf("SSD1306 OLED initialized\n");
+  printf("SH1107 OLED initialized\n");
 }
 
 void ssd1306_clear(void) {
@@ -175,18 +184,17 @@ void ssd1306_set_cursor(uint8_t col, uint8_t page) {
   cursor_page = page;
 }
 
-// Write a single character to the buffer at cursor position
 static void ssd1306_write_char(char c) {
   if (c < 32 || c > 126) return;
-  if (cursor_col + 5 >= SSD1306_WIDTH) return;
+  if (cursor_col + 5 >= OLED_WIDTH) return;
 
   uint8_t idx = c - 32;
-  uint16_t buf_offset = cursor_page * SSD1306_WIDTH + cursor_col;
+  uint16_t buf_offset = cursor_page * OLED_WIDTH + cursor_col;
 
   for (int i = 0; i < 5; i++) {
     display_buf[buf_offset + i] = font_5x7[idx][i];
   }
-  display_buf[buf_offset + 5] = 0x00; // 1px spacing between chars
+  display_buf[buf_offset + 5] = 0x00;
   cursor_col += 6;
 }
 
@@ -197,29 +205,27 @@ void ssd1306_write_string(const char* str) {
 }
 
 void ssd1306_display(void) {
-  // Set column address range: 0-127
-  ssd1306_cmd(0x21);
-  ssd1306_cmd(0x00);
-  ssd1306_cmd(0x7F);
-  // Set page address range: 0-3
-  ssd1306_cmd(0x22);
-  ssd1306_cmd(0x00);
-  ssd1306_cmd(0x03);
+  for (uint8_t page = 0; page < OLED_PAGES; page++) {
+    // Set page address
+    sh1107_cmd(0xB0 | page);
+    // Set column address to 0
+    sh1107_cmd(0x00);
+    sh1107_cmd(0x10);
 
-  // Send display buffer in chunks
-  // I2C data: first byte 0x40 (data mode), then pixel data
-  for (int i = 0; i < SSD1306_PAGES * SSD1306_WIDTH; i += 32) {
-    uint8_t chunk[33];
-    chunk[0] = 0x40; // Data mode
-    int len = 32;
-    if (i + len > SSD1306_PAGES * SSD1306_WIDTH) {
-      len = SSD1306_PAGES * SSD1306_WIDTH - i;
+    // Send page data in chunks
+    for (int col = 0; col < OLED_WIDTH; col += 32) {
+      uint8_t chunk[33];
+      chunk[0] = 0x40; // Data mode
+      int len = 32;
+      if (col + len > OLED_WIDTH) {
+        len = OLED_WIDTH - col;
+      }
+      memcpy(&chunk[1], &display_buf[page * OLED_WIDTH + col], len);
+
+      nrf_twi_mngr_transfer_t const transfer[] = {
+        NRF_TWI_MNGR_WRITE(SH1107_ADDRESS, chunk, len + 1, 0),
+      };
+      nrf_twi_mngr_perform(i2c_manager, NULL, transfer, 1, NULL);
     }
-    memcpy(&chunk[1], &display_buf[i], len);
-
-    nrf_twi_mngr_transfer_t const transfer[] = {
-      NRF_TWI_MNGR_WRITE(SSD1306_ADDRESS, chunk, len + 1, 0),
-    };
-    nrf_twi_mngr_perform(i2c_manager, NULL, transfer, 1, NULL);
   }
 }
