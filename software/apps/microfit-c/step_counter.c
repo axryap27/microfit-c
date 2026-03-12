@@ -34,7 +34,7 @@ void step_counter_init(void) {
   }
 }
 
-void step_counter_update(lsm303agr_measurement_t accel) {
+void step_counter_update(adxl335_measurement_t accel) {
   float x = accel.x_axis;
   float y = accel.y_axis;
   float z = accel.z_axis;
