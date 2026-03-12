@@ -44,6 +44,7 @@ void max30102_update(void);
 uint16_t max30102_read_bpm(void);
 
 // Get latest raw IR value (useful for debugging)
+
 uint32_t max30102_get_ir(void);
 
 // Check if sensor is connected (Part ID == 0x15)

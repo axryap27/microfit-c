@@ -96,8 +96,8 @@ static void process_sample(uint32_t ir_val) {
   if ((int32_t)ir_val < (int32_t)ir_prev && rising) {
     // We just passed a peak
     uint32_t interval_samples = sample_count - last_beat_sample;
-    // At 100Hz effective rate (after 4x averaging), each sample ≈ 10ms
-    uint32_t interval_ms = interval_samples * 10;
+    // 100Hz base / 4x averaging = 25Hz effective, each sample ≈ 40ms
+    uint32_t interval_ms = interval_samples * 40;
 
     if (interval_ms > MIN_BEAT_INTERVAL && interval_ms < MAX_BEAT_INTERVAL) {
       // Valid beat
