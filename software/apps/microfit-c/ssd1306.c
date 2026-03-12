@@ -134,35 +134,41 @@ void ssd1306_init(const nrf_twi_mngr_t* i2c) {
 
   sh1107_cmd(0xAE); // Display OFF
 
-  sh1107_cmd(0xDC); // Set display start line
-  sh1107_cmd(0x00);
-
-  sh1107_cmd(0x81); // Set contrast
-  sh1107_cmd(0xCF); // Higher contrast
-
-  sh1107_cmd(0x20); // Set memory addressing mode (page)
-
-  sh1107_cmd(0xA1); // Segment re-map (flipped)
-  sh1107_cmd(0xC8); // COM output scan direction (flipped)
+  sh1107_cmd(0xD5); // Set clock divide ratio
+  sh1107_cmd(0x80);
 
   sh1107_cmd(0xA8); // Set multiplex ratio
-  sh1107_cmd(0x7F); // 128 lines (SH1107 is 128x128 internally)
+  sh1107_cmd(0x3F); // 64 lines
 
   sh1107_cmd(0xD3); // Set display offset
-  sh1107_cmd(0x00); // No offset
+  sh1107_cmd(0x00);
 
-  sh1107_cmd(0xD5); // Set clock divide ratio
-  sh1107_cmd(0x51);
+  sh1107_cmd(0x40); // Set start line 0
+
+  sh1107_cmd(0x8D); // Charge pump
+  sh1107_cmd(0x14); // Enable
+
+  sh1107_cmd(0x20); // Memory addressing mode
+  sh1107_cmd(0x00); // Horizontal
+
+  sh1107_cmd(0xA1); // Segment re-map
+  sh1107_cmd(0xC8); // COM scan direction
+
+  sh1107_cmd(0xDA); // COM pins config
+  sh1107_cmd(0x12); // Alternative COM pin, for 128x64
+
+  sh1107_cmd(0x81); // Set contrast
+  sh1107_cmd(0xCF);
 
   sh1107_cmd(0xD9); // Set pre-charge period
-  sh1107_cmd(0x22);
+  sh1107_cmd(0xF1);
 
   sh1107_cmd(0xDB); // Set VCOMH deselect level
-  sh1107_cmd(0x35);
+  sh1107_cmd(0x40);
 
-  sh1107_cmd(0xB0); // Set page address to 0
   sh1107_cmd(0xA4); // Display from RAM
-  sh1107_cmd(0xA6); // Normal display (not inverted)
+  sh1107_cmd(0xA6); // Normal display
+  sh1107_cmd(0x2E); // Deactivate scroll
 
   sh1107_cmd(0xAF); // Display ON
 
@@ -170,7 +176,7 @@ void ssd1306_init(const nrf_twi_mngr_t* i2c) {
 
   ssd1306_clear();
   ssd1306_display();
-  printf("SH1107 OLED initialized\n");
+  printf("OLED initialized (0x3D)\n");
 }
 
 void ssd1306_clear(void) {
@@ -205,27 +211,28 @@ void ssd1306_write_string(const char* str) {
 }
 
 void ssd1306_display(void) {
-  for (uint8_t page = 0; page < OLED_PAGES; page++) {
-    // Set page address
-    sh1107_cmd(0xB0 | page);
-    // Set column address to 0
-    sh1107_cmd(0x00);
-    sh1107_cmd(0x10);
+  // Set column address range: 0-127
+  sh1107_cmd(0x21);
+  sh1107_cmd(0x00);
+  sh1107_cmd(0x7F);
+  // Set page address range: 0-7
+  sh1107_cmd(0x22);
+  sh1107_cmd(0x00);
+  sh1107_cmd(OLED_PAGES - 1);
 
-    // Send page data in chunks
-    for (int col = 0; col < OLED_WIDTH; col += 32) {
-      uint8_t chunk[33];
-      chunk[0] = 0x40; // Data mode
-      int len = 32;
-      if (col + len > OLED_WIDTH) {
-        len = OLED_WIDTH - col;
-      }
-      memcpy(&chunk[1], &display_buf[page * OLED_WIDTH + col], len);
-
-      nrf_twi_mngr_transfer_t const transfer[] = {
-        NRF_TWI_MNGR_WRITE(SH1107_ADDRESS, chunk, len + 1, 0),
-      };
-      nrf_twi_mngr_perform(i2c_manager, NULL, transfer, 1, NULL);
+  // Send display buffer in chunks
+  for (int i = 0; i < OLED_PAGES * OLED_WIDTH; i += 32) {
+    uint8_t chunk[33];
+    chunk[0] = 0x40; // Data mode
+    int len = 32;
+    if (i + len > OLED_PAGES * OLED_WIDTH) {
+      len = OLED_PAGES * OLED_WIDTH - i;
     }
+    memcpy(&chunk[1], &display_buf[i], len);
+
+    nrf_twi_mngr_transfer_t const transfer[] = {
+      NRF_TWI_MNGR_WRITE(SH1107_ADDRESS, chunk, len + 1, 0),
+    };
+    nrf_twi_mngr_perform(i2c_manager, NULL, transfer, 1, NULL);
   }
 }
