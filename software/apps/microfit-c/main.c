@@ -96,20 +96,6 @@ int main(void) {
   i2c_config.interrupt_priority = 0;
   nrf_twi_mngr_init(&twi_mngr_external, &i2c_config);
 
-  // Scan I2C bus to find connected devices
-  printf("Scanning I2C bus...\n");
-  for (uint8_t addr = 0x08; addr < 0x78; addr++) {
-    uint8_t dummy;
-    nrf_twi_mngr_transfer_t const scan_transfer[] = {
-      NRF_TWI_MNGR_READ(addr, &dummy, 1, 0),
-    };
-    ret_code_t result = nrf_twi_mngr_perform(&twi_mngr_external, NULL, scan_transfer, 1, NULL);
-    if (result == NRF_SUCCESS) {
-      printf("  Found device at 0x%02X\n", addr);
-    }
-  }
-  printf("Scan done.\n");
-
   // Initialize sensors and display
   adxl335_init();
   max30102_init(&twi_mngr_external);
