@@ -138,18 +138,18 @@ void ssd1306_init(const nrf_twi_mngr_t* i2c) {
   sh1107_cmd(0x00);
 
   sh1107_cmd(0x81); // Set contrast
-  sh1107_cmd(0x2F);
+  sh1107_cmd(0xCF); // Higher contrast
 
   sh1107_cmd(0x20); // Set memory addressing mode (page)
 
-  sh1107_cmd(0xA0); // Segment re-map (normal)
-  sh1107_cmd(0xC0); // COM output scan direction (normal)
+  sh1107_cmd(0xA1); // Segment re-map (flipped)
+  sh1107_cmd(0xC8); // COM output scan direction (flipped)
 
   sh1107_cmd(0xA8); // Set multiplex ratio
-  sh1107_cmd(0x3F); // 64 lines
+  sh1107_cmd(0x7F); // 128 lines (SH1107 is 128x128 internally)
 
   sh1107_cmd(0xD3); // Set display offset
-  sh1107_cmd(0x60); // Offset for SparkFun 1.3" module
+  sh1107_cmd(0x00); // No offset
 
   sh1107_cmd(0xD5); // Set clock divide ratio
   sh1107_cmd(0x51);

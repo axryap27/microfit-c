@@ -12,9 +12,10 @@
 
 // BPM algorithm parameters
 #define BPM_HISTORY_SIZE  10
-#define MIN_BEAT_INTERVAL 250   // ms, max ~240 BPM
-#define MAX_BEAT_INTERVAL 2500  // ms, min ~24 BPM
+#define MIN_BEAT_INTERVAL 300   // ms, max ~200 BPM
+#define MAX_BEAT_INTERVAL 2000  // ms, min ~30 BPM
 #define IR_THRESHOLD      50000 // minimum IR value to consider finger present
+#define MIN_PEAK_AMP      200   // minimum peak-to-trough amplitude to count as beat
 
 static const nrf_twi_mngr_t* i2c_manager = NULL;
 static bool connected = false;
@@ -24,8 +25,10 @@ static uint16_t bpm;
 static int32_t ibi_history[BPM_HISTORY_SIZE];
 static uint8_t ibi_index;
 static uint32_t last_ir;
-static uint32_t ir_prev;
-static int32_t ir_avg;
+static int32_t ir_filtered;       // low-pass filtered signal
+static int32_t ir_filtered_prev;  // previous filtered value
+static int32_t ir_peak;           // current peak value
+static int32_t ir_trough;         // current trough value
 static bool rising;
 static uint32_t sample_count;
 static uint32_t last_beat_sample;
@@ -80,53 +83,70 @@ static void process_sample(uint32_t ir_val) {
   last_ir = ir_val;
   sample_count++;
 
-  // Simple moving average for baseline
-  ir_avg = ir_avg - (ir_avg >> 4) + ((int32_t)ir_val >> 4);
-
   // Ignore if no finger detected
   if (ir_val < IR_THRESHOLD) {
     bpm = 0;
     rising = false;
+    ir_filtered = (int32_t)ir_val;
+    ir_filtered_prev = ir_filtered;
     return;
   }
 
-  int32_t diff = (int32_t)ir_val - ir_avg;
+  // Low-pass filter: smooth out noise (alpha ≈ 0.25)
+  ir_filtered = ir_filtered - (ir_filtered >> 2) + ((int32_t)ir_val >> 2);
 
-  // Detect transition from rising to falling (peak)
-  if ((int32_t)ir_val < (int32_t)ir_prev && rising) {
-    // We just passed a peak
-    uint32_t interval_samples = sample_count - last_beat_sample;
-    // 100Hz base / 4x averaging = 25Hz effective, each sample ≈ 40ms
-    uint32_t interval_ms = interval_samples * 40;
+  // Track peak and trough
+  if (ir_filtered > ir_peak) {
+    ir_peak = ir_filtered;
+  }
+  if (ir_filtered < ir_trough) {
+    ir_trough = ir_filtered;
+  }
 
-    if (interval_ms > MIN_BEAT_INTERVAL && interval_ms < MAX_BEAT_INTERVAL) {
-      // Valid beat
-      ibi_history[ibi_index] = interval_ms;
-      ibi_index = (ibi_index + 1) % BPM_HISTORY_SIZE;
+  // Detect transition from rising to falling (peak found)
+  if (ir_filtered < ir_filtered_prev && rising) {
+    int32_t amplitude = ir_peak - ir_trough;
 
-      // Average IBI
-      int32_t total = 0;
-      for (int i = 0; i < BPM_HISTORY_SIZE; i++) {
-        total += ibi_history[i];
+    // Only count as beat if amplitude is significant
+    if (amplitude > MIN_PEAK_AMP) {
+      uint32_t interval_samples = sample_count - last_beat_sample;
+      // 100Hz base / 4x averaging = 25Hz effective, each sample ≈ 40ms
+      uint32_t interval_ms = interval_samples * 40;
+
+      if (interval_ms > MIN_BEAT_INTERVAL && interval_ms < MAX_BEAT_INTERVAL) {
+        ibi_history[ibi_index] = interval_ms;
+        ibi_index = (ibi_index + 1) % BPM_HISTORY_SIZE;
+
+        // Average IBI for stable BPM
+        int32_t total = 0;
+        for (int i = 0; i < BPM_HISTORY_SIZE; i++) {
+          total += ibi_history[i];
+        }
+        int32_t avg_ibi = total / BPM_HISTORY_SIZE;
+        if (avg_ibi > 0) {
+          bpm = 60000 / avg_ibi;
+        }
+
+        last_beat_sample = sample_count;
+      } else if (interval_ms >= MAX_BEAT_INTERVAL) {
+        last_beat_sample = sample_count;
       }
-      int32_t avg_ibi = total / BPM_HISTORY_SIZE;
-      if (avg_ibi > 0) {
-        bpm = 60000 / avg_ibi;
-      }
-
-      last_beat_sample = sample_count;
-    } else if (interval_ms >= MAX_BEAT_INTERVAL) {
-      // Too long, reset
-      last_beat_sample = sample_count;
     }
+
+    // Reset trough for next cycle
+    ir_trough = ir_filtered;
     rising = false;
   }
 
-  if ((int32_t)ir_val > (int32_t)ir_prev && diff > 0) {
+  if (ir_filtered > ir_filtered_prev) {
     rising = true;
+    // Reset peak for next cycle when starting to rise
+    if (!rising) {
+      ir_peak = ir_filtered;
+    }
   }
 
-  ir_prev = ir_val;
+  ir_filtered_prev = ir_filtered;
 }
 
 void max30102_init(const nrf_twi_mngr_t* i2c) {
@@ -170,13 +190,15 @@ void max30102_init(const nrf_twi_mngr_t* i2c) {
   bpm = 0;
   ibi_index = 0;
   last_ir = 0;
-  ir_prev = 0;
-  ir_avg = 0;
+  ir_filtered = 0;
+  ir_filtered_prev = 0;
+  ir_peak = 0;
+  ir_trough = 0;
   rising = false;
   sample_count = 0;
   last_beat_sample = 0;
   for (int i = 0; i < BPM_HISTORY_SIZE; i++) {
-    ibi_history[i] = 600; // ~100 BPM default
+    ibi_history[i] = 800; // ~75 BPM default
   }
 }
 
