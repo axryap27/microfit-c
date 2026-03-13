@@ -23,16 +23,12 @@ static float mag_avg;
 static uint32_t samples_since_step;
 static bool above_threshold;
 
-static uint32_t warmup_samples;
-#define WARMUP_COUNT 100  // ignore first 100 samples (~1 sec at 100Hz)
-
 void step_counter_init(void) {
   step_count = 0;
   history_idx = 0;
   mag_avg = 1.0; // expect ~1g at rest
   samples_since_step = MIN_STEP_INTERVAL;
   above_threshold = false;
-  warmup_samples = 0;
   for (int i = 0; i < AVG_WINDOW; i++) {
     mag_history[i] = 1.0;
   }
@@ -45,17 +41,6 @@ void step_counter_update(adxl335_measurement_t accel) {
 
   // Compute acceleration magnitude
   float mag = sqrt(x * x + y * y + z * z);
-
-  // Skip warmup period to let ADC/moving average settle
-  if (warmup_samples < WARMUP_COUNT) {
-    warmup_samples++;
-    // Still update the moving average during warmup
-    mag_avg -= mag_history[history_idx] / AVG_WINDOW;
-    mag_history[history_idx] = mag;
-    mag_avg += mag / AVG_WINDOW;
-    history_idx = (history_idx + 1) % AVG_WINDOW;
-    return;
-  }
 
   // Update moving average
   mag_avg -= mag_history[history_idx] / AVG_WINDOW;
