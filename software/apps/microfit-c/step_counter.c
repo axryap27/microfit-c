@@ -12,8 +12,8 @@
 #include "step_counter.h"
 
 // Step detection parameters
-#define STEP_THRESHOLD    0.3   // g above/below average to count as a step
-#define MIN_STEP_INTERVAL 15    // minimum samples between steps (~150ms at 100Hz)
+#define STEP_THRESHOLD    0.15  // g above/below average to count as a step
+#define MIN_STEP_INTERVAL 10    // minimum samples between steps (~100ms at 100Hz)
 #define AVG_WINDOW        16    // number of samples for moving average
 
 static uint32_t step_count;
