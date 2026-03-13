@@ -46,8 +46,5 @@ uint16_t max30102_read_bpm(void);
 // Get latest raw IR value (useful for debugging)
 uint32_t max30102_get_ir(void);
 
-// Get SpO2 percentage (0 if no valid reading)
-uint16_t max30102_read_spo2(void);
-
 // Check if sensor is connected (Part ID == 0x15)
 bool max30102_is_connected(void);

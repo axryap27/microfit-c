@@ -44,16 +44,15 @@ static void pulse_timer_callback(void* _unused) {
 static void display_timer_callback(void* _unused) {
   uint32_t steps = step_counter_get_steps();
   uint16_t bpm = max30102_read_bpm();
-  uint16_t sp = max30102_read_spo2();
   uint32_t ir = max30102_get_ir();
 
   // Serial output
   printf("--- MicroFit ---\n");
   printf("Steps: %u\n", (unsigned int)steps);
   if (bpm > 0) {
-    printf("Heart: %u BPM  SpO2: %u%%\n", bpm, sp);
+    printf("Heart: %u BPM\n", bpm);
   } else {
-    printf("Heart: -- BPM  SpO2: --%% (IR: %u)\n", (unsigned int)ir);
+    printf("Heart: -- BPM (IR: %u)\n", (unsigned int)ir);
   }
   printf("\n");
 
@@ -81,9 +80,6 @@ static void display_timer_callback(void* _unused) {
     ssd1306_write_string("No pulse sensor");
   } else if (ir < 50000) {
     ssd1306_write_string("Place finger...");
-  } else if (sp > 0) {
-    snprintf(line, sizeof(line), "SpO2: %u%%", sp);
-    ssd1306_write_string(line);
   } else {
     ssd1306_write_string("Reading...");
   }
