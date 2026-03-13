@@ -217,14 +217,20 @@ void max30102_init(const nrf_twi_mngr_t* i2c) {
   i2c_reg_write(MAX30102_FIFO_OVF_CTR, 0x00);
   i2c_reg_write(MAX30102_FIFO_RD_PTR, 0x00);
 
-  // Init BPM state
+  // Init BPM and SpO2 state
   bpm = 0;
+  spo2 = 0;
   ibi_index = 0;
   last_ir = 0;
   ir_filtered = 0;
   ir_filtered_prev = 0;
   ir_peak = 0;
   ir_trough = 0;
+  red_filtered = 0;
+  red_peak = 0;
+  red_trough = 0;
+  red_dc = 0;
+  ir_dc = 0;
   rising = false;
   sample_count = 0;
   last_beat_sample = 0;
@@ -245,7 +251,7 @@ void max30102_update(void) {
   for (int i = 0; i < num_samples; i++) {
     uint32_t red, ir;
     fifo_read_sample(&red, &ir);
-    process_sample(ir);
+    process_sample(red, ir);
   }
 }
 
@@ -255,6 +261,10 @@ uint16_t max30102_read_bpm(void) {
 
 uint32_t max30102_get_ir(void) {
   return last_ir;
+}
+
+uint16_t max30102_read_spo2(void) {
+  return spo2;
 }
 
 bool max30102_is_connected(void) {
