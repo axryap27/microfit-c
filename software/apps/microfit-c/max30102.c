@@ -33,6 +33,14 @@ static bool rising;
 static uint32_t sample_count;
 static uint32_t last_beat_sample;
 
+// SpO2 state
+static uint16_t spo2;
+static int32_t red_filtered;
+static int32_t red_peak;
+static int32_t red_trough;
+static int32_t red_dc;            // DC component (baseline) of red
+static int32_t ir_dc;             // DC component (baseline) of IR
+
 // Helper: 1-byte I2C read
 static uint8_t i2c_reg_read(uint8_t reg_addr) {
   uint8_t rx_buf = 0;
@@ -78,37 +86,51 @@ static void fifo_read_sample(uint32_t* red, uint32_t* ir) {
   *ir  = ((uint32_t)(buf[3] & 0x03) << 16) | ((uint32_t)buf[4] << 8) | buf[5];
 }
 
-// Process one IR sample for beat detection
-static void process_sample(uint32_t ir_val) {
+// Process one sample for beat detection and SpO2
+static void process_sample(uint32_t red_val, uint32_t ir_val) {
   last_ir = ir_val;
   sample_count++;
 
   // Ignore if no finger detected
   if (ir_val < IR_THRESHOLD) {
     bpm = 0;
+    spo2 = 0;
     rising = false;
     ir_filtered = (int32_t)ir_val;
     ir_filtered_prev = ir_filtered;
+    red_filtered = (int32_t)red_val;
     return;
   }
 
-  // Low-pass filter: smooth out noise (alpha ≈ 0.25)
+  // Low-pass filter both signals (alpha ≈ 0.25)
   ir_filtered = ir_filtered - (ir_filtered >> 2) + ((int32_t)ir_val >> 2);
+  red_filtered = red_filtered - (red_filtered >> 2) + ((int32_t)red_val >> 2);
 
-  // Track peak and trough
+  // Update DC baselines (very slow moving average)
+  ir_dc = ir_dc - (ir_dc >> 6) + ((int32_t)ir_val >> 6);
+  red_dc = red_dc - (red_dc >> 6) + ((int32_t)red_val >> 6);
+
+  // Track peaks and troughs for both signals
   if (ir_filtered > ir_peak) {
     ir_peak = ir_filtered;
   }
   if (ir_filtered < ir_trough) {
     ir_trough = ir_filtered;
   }
+  if (red_filtered > red_peak) {
+    red_peak = red_filtered;
+  }
+  if (red_filtered < red_trough) {
+    red_trough = red_filtered;
+  }
 
   // Detect transition from rising to falling (peak found)
   if (ir_filtered < ir_filtered_prev && rising) {
-    int32_t amplitude = ir_peak - ir_trough;
+    int32_t ir_amplitude = ir_peak - ir_trough;
+    int32_t red_amplitude = red_peak - red_trough;
 
     // Only count as beat if amplitude is significant
-    if (amplitude > MIN_PEAK_AMP) {
+    if (ir_amplitude > MIN_PEAK_AMP) {
       uint32_t interval_samples = sample_count - last_beat_sample;
       // 100Hz base / 4x averaging = 25Hz effective, each sample ≈ 40ms
       uint32_t interval_ms = interval_samples * 40;
@@ -127,23 +149,32 @@ static void process_sample(uint32_t ir_val) {
           bpm = 60000 / avg_ibi;
         }
 
+        // Calculate SpO2 using ratio of ratios
+        // R = (AC_red / DC_red) / (AC_ir / DC_ir)
+        if (ir_dc > 0 && red_dc > 0 && ir_amplitude > 0) {
+          // Multiply by 1000 to avoid float: R*1000
+          int32_t r_x1000 = ((int32_t)red_amplitude * 1000 / red_dc) * ir_dc / ir_amplitude;
+          // SpO2 = 110 - 25 * R (linear approximation)
+          int32_t sp = 110 - (25 * r_x1000 / 1000);
+          if (sp > 100) sp = 100;
+          if (sp < 0) sp = 0;
+          spo2 = (uint16_t)sp;
+        }
+
         last_beat_sample = sample_count;
       } else if (interval_ms >= MAX_BEAT_INTERVAL) {
         last_beat_sample = sample_count;
       }
     }
 
-    // Reset trough for next cycle
+    // Reset troughs for next cycle
     ir_trough = ir_filtered;
+    red_trough = red_filtered;
     rising = false;
   }
 
   if (ir_filtered > ir_filtered_prev) {
     rising = true;
-    // Reset peak for next cycle when starting to rise
-    if (!rising) {
-      ir_peak = ir_filtered;
-    }
   }
 
   ir_filtered_prev = ir_filtered;
