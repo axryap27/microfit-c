@@ -13,14 +13,12 @@
 #include "nrf_twi_mngr.h"
 
 #include "microbit_v2.h"
-// #include "adxl335.h"  // ADXL335 - uncomment for submission
-#include "lsm303agr.h"   // Internal accel - comment out for submission
+#include "adxl335.h"
 #include "step_counter.h"
 #include "max30102.h"
 #include "ssd1306.h"
 
-// I2C managers
-NRF_TWI_MNGR_DEF(twi_mngr_internal, 1, 0); // Internal accel - comment out for submission
+// I2C manager (QWIIC: MAX30102 + OLED)
 NRF_TWI_MNGR_DEF(twi_mngr_external, 1, 1);
 
 // Timers
@@ -30,8 +28,7 @@ APP_TIMER_DEF(display_timer); // 1Hz for display + serial output
 
 // 100Hz: read accelerometer, feed step counter
 static void accel_timer_callback(void* _unused) {
-  // adxl335_measurement_t accel = adxl335_read_accelerometer();  // ADXL335 - uncomment for submission
-  adxl335_measurement_t accel = lsm303agr_read_accelerometer();   // Internal - comment out for submission
+  adxl335_measurement_t accel = adxl335_read_accelerometer();
   step_counter_update(accel);
 }
 
@@ -91,15 +88,7 @@ int main(void) {
   nrf_delay_ms(500); // Wait for serial connection
   printf("\nMicroFit started!\n");
 
-  // Initialize internal I2C (LSM303AGR) - comment out for submission
-  nrf_drv_twi_config_t i2c_int_config = NRF_DRV_TWI_DEFAULT_CONFIG;
-  i2c_int_config.scl = I2C_INTERNAL_SCL;
-  i2c_int_config.sda = I2C_INTERNAL_SDA;
-  i2c_int_config.frequency = NRF_DRV_TWI_FREQ_100K;
-  i2c_int_config.interrupt_priority = 0;
-  nrf_twi_mngr_init(&twi_mngr_internal, &i2c_int_config);
-
-  // Initialize external I2C (QWIIC: MAX30102 + OLED)
+  // Initialize I2C (QWIIC: MAX30102 + OLED)
   nrf_drv_twi_config_t i2c_ext_config = NRF_DRV_TWI_DEFAULT_CONFIG;
   i2c_ext_config.scl = I2C_QWIIC_SCL;
   i2c_ext_config.sda = I2C_QWIIC_SDA;
@@ -108,8 +97,7 @@ int main(void) {
   nrf_twi_mngr_init(&twi_mngr_external, &i2c_ext_config);
 
   // Initialize sensors and display
-  // adxl335_init();  // ADXL335 - uncomment for submission
-  lsm303agr_init(&twi_mngr_internal);  // Internal - comment out for submission
+  adxl335_init();
   max30102_init(&twi_mngr_external);
   ssd1306_init(&twi_mngr_external);
   step_counter_init();
