@@ -210,6 +210,74 @@ void ssd1306_write_string(const char* str) {
   }
 }
 
+void ssd1306_draw_pixel(uint8_t x, uint8_t y, bool on) {
+  if (x >= OLED_WIDTH || y >= OLED_HEIGHT) return;
+  uint8_t page = y / 8;
+  uint8_t bit = y % 8;
+  uint16_t offset = page * OLED_WIDTH + x;
+  if (on) {
+    display_buf[offset] |= (1 << bit);
+  } else {
+    display_buf[offset] &= ~(1 << bit);
+  }
+}
+
+void ssd1306_draw_hline(uint8_t x, uint8_t y, uint8_t width) {
+  for (uint8_t i = 0; i < width && (x + i) < OLED_WIDTH; i++) {
+    ssd1306_draw_pixel(x + i, y, true);
+  }
+}
+
+void ssd1306_draw_bitmap(uint8_t x, uint8_t page, const uint8_t* bitmap, uint8_t w, uint8_t pages) {
+  for (uint8_t p = 0; p < pages; p++) {
+    if (page + p >= OLED_PAGES) break;
+    uint16_t buf_offset = (page + p) * OLED_WIDTH + x;
+    for (uint8_t col = 0; col < w && (x + col) < OLED_WIDTH; col++) {
+      display_buf[buf_offset + col] |= bitmap[p * w + col];
+    }
+  }
+}
+
+void ssd1306_write_string_2x(const char* str) {
+  while (*str) {
+    char c = *str++;
+    if (c < 32 || c > 126) continue;
+    if (cursor_col + 11 >= OLED_WIDTH) break;
+
+    uint8_t idx = c - 32;
+    uint16_t top_offset = cursor_page * OLED_WIDTH + cursor_col;
+    uint16_t bot_offset = (cursor_page + 1) * OLED_WIDTH + cursor_col;
+
+    for (int i = 0; i < 5; i++) {
+      uint8_t glyph = font_5x7[idx][i];
+      // Stretch each column vertically: each bit becomes 2 bits
+      uint16_t stretched = 0;
+      for (int b = 0; b < 7; b++) {
+        if (glyph & (1 << b)) {
+          stretched |= (3 << (b * 2));
+        }
+      }
+      uint8_t top_byte = stretched & 0xFF;
+      uint8_t bot_byte = (stretched >> 8) & 0xFF;
+      // Double each column horizontally
+      if (cursor_page + 1 < OLED_PAGES) {
+        display_buf[top_offset + i * 2] = top_byte;
+        display_buf[top_offset + i * 2 + 1] = top_byte;
+        display_buf[bot_offset + i * 2] = bot_byte;
+        display_buf[bot_offset + i * 2 + 1] = bot_byte;
+      }
+    }
+    // 2px gap between chars
+    display_buf[top_offset + 10] = 0;
+    display_buf[top_offset + 11] = 0;
+    if (cursor_page + 1 < OLED_PAGES) {
+      display_buf[bot_offset + 10] = 0;
+      display_buf[bot_offset + 11] = 0;
+    }
+    cursor_col += 12;
+  }
+}
+
 void ssd1306_display(void) {
   // Set column address range: 0-127
   sh1107_cmd(0x21);
